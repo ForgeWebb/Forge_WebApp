@@ -6,7 +6,6 @@ import { initRecords } from './records.js'
 import { initReviewSettings } from './reviewSettings.js'
 import { initReviewList } from './reviewList.js'
 import { initBrowse } from './browse.js'
-import { initAiSettings } from './aiSettings.js'
 import { initAccountSettings } from './accountSettings.js'
 import { renderMarkdown } from './markdown.js'
 import * as voice from './voice.js'
@@ -453,7 +452,6 @@ function openReviewListScreen() {
   showBrowse()
 }
 
-const loadAiKeyStatus = initAiSettings()
 
 // The header falls back to the email until a username comes back, rather
 // than waiting on the request -- a signed-in header that is blank for a
@@ -515,7 +513,7 @@ el.backFromAboutBtn.addEventListener('click', openReader)
 
 // The notebook owns two of the screens above and swaps between them itself;
 // showScreen only has to get us onto the first one.
-const notebook = initNotebook({ onBack: openReader, onNeedAiKey: openSettings })
+const notebook = initNotebook({ onBack: openReader })
 
 el.notebookBtn.addEventListener('click', () => {
   showScreen('notebookHubScreen')
@@ -1489,15 +1487,11 @@ async function explainSentence(sentence, icon) {
       `<strong>Explanation:</strong> ${escapeHtml(explanation || 'The AI returned nothing for that clue.')}`
   } catch (error) {
     if (ticket !== sentenceRequest || askedFor !== questionGeneration) return
-    if (error instanceof ApiError && error.payload?.code === 'no_key') {
-      // A setup step, not a failure -- routed to Settings with the field in
-      // view, the same as the two whole-tossup AI features.
-      el.sentenceExplanationContainer.textContent = error.message
-      openSettings()
-      $('aiKeyInput')?.focus()
-    } else {
-      el.sentenceExplanationContainer.textContent = error.message
-    }
+    // `no_key` used to open Settings and focus the key box. The website has
+    // no key box any more -- AI runs on the operator's key (see
+    // web/api/ai.py) -- so the message, which now says the feature is off,
+    // is all there is to show.
+    el.sentenceExplanationContainer.textContent = error.message
   } finally {
     // Restored even on a superseded request: the icon belongs to the tossup on
     // screen, and leaving it as an ellipsis would make a clue look permanently
@@ -1568,16 +1562,7 @@ el.getExplanationBtn.addEventListener('click', async () => {
     el.saveExplanationBtn.classList.remove('hidden')
   } catch (error) {
     if (asked !== questionGeneration) return
-    if (error instanceof ApiError && error.payload?.code === 'no_key') {
-      // Not a failure -- a setup step. Routed to Settings rather than to the
-      // generic error text, with the field it needs already in view.
-      el.explanationContainer.innerHTML =
-        `<p>${escapeHtml(error.message)}</p>`
-      openSettings()
-      $('aiKeyInput')?.focus()
-    } else {
-      el.explanationContainer.textContent = error.message
-    }
+    el.explanationContainer.textContent = error.message
     el.getExplanationBtn.disabled = false
   }
 })
@@ -1723,13 +1708,7 @@ el.createFlashcardBtn.addEventListener('click', async () => {
     paintDraftCards(cards, source.category, source.id)
   } catch (error) {
     if (asked !== questionGeneration) return
-    if (error instanceof ApiError && error.payload?.code === 'no_key') {
-      el.draftFlashcardsContainer.innerHTML = `<p>${escapeHtml(error.message)}</p>`
-      openSettings()
-      $('aiKeyInput')?.focus()
-    } else {
-      el.draftFlashcardsContainer.textContent = error.message
-    }
+    el.draftFlashcardsContainer.textContent = error.message
   } finally {
     el.createFlashcardBtn.disabled = false
   }
@@ -2087,9 +2066,7 @@ paintShortcutLists()
 
 // Font size and the shortcut switch are local prefs, kept in localStorage
 // under PREFS, which is declared with the rest of the state at the top of this
-// file -- see the note there. The Gemini API key is not: it is a per-account
-// secret, so it round-trips through the server on every open/save -- see
-// aiSettings.js.
+// file -- see the note there.
 
 function loadPrefs() {
   let saved = {}
@@ -2144,7 +2121,6 @@ function applyFontSize(px) {
 function openSettings() {
   el.settingsModal.classList.remove('hidden')
   el.settingsModal.classList.add('flex')
-  loadAiKeyStatus()
   loadAccountEmail()
 }
 el.settingsBtn.addEventListener('click', openSettings)

@@ -916,30 +916,6 @@
           </details>
         </div>
 
-        <!-- Each account brings its own Gemini key, the same model the
-             desktop build uses -- see web/api/ai.py and web/api/secrets_store.py
-             for why. Saved server-side, encrypted, and never echoed back in
-             the clear: the box below only ever shows a hint of what's saved,
-             never the key itself. -->
-        <div class="mb-4 border-t border-[#584741] pt-4">
-          <label class="block text-sm font-medium text-gray-300">Gemini API key</label>
-          <p class="mt-1 text-xs text-text-muted">
-            Needed for AI explanations, study guides, flashcards, and the
-            Knowledge Depth panel. Get a free key at
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
-               class="underline hover:text-white">aistudio.google.com/apikey</a>.
-          </p>
-          <p id="aiKeyStatus" class="mt-2 text-xs text-text-muted"></p>
-          <div class="mt-2 flex items-center gap-2">
-            <input id="aiKeyInput" type="password" placeholder="Paste your Gemini API key"
-                   autocomplete="off"
-                   class="flex-1 rounded-lg border border-[#584741] bg-[#1d1816] p-2 text-sm focus:border-[#efe0db] focus:outline-none" aria-label="Gemini API key">
-            <button id="saveAiKeyBtn" class="shrink-0 rounded-full bg-sky-600 px-3 py-2 text-sm font-bold hover:bg-sky-700 disabled:opacity-50">Save</button>
-          </div>
-          <button id="removeAiKeyBtn" class="mt-2 hidden text-xs text-red-400 underline hover:text-red-300">Remove saved key</button>
-          <p id="aiKeyMessage" class="mt-2 text-xs"></p>
-        </div>
-
         <!-- Email and password, straight against Supabase Auth -- there is no
              web/api route for either, the same way there is none for sign-in
              itself: this is the account's identity, not app data, and

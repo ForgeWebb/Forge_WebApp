@@ -55,15 +55,25 @@ CORS_ORIGINS = [
 # guessing.
 SECRETS_ENCRYPTION_KEY = os.environ.get("SECRETS_ENCRYPTION_KEY")
 
-# There is deliberately no server-wide Gemini key.
+# The website's Gemini key: one key, the operator's, spent on behalf of every
+# signed-in browser user. Set on Railway; never in the repo.
 #
-# Each player brings their own, stored encrypted per account (see
-# secrets_store.py) -- the desktop's model, kept on purpose. A server-level
-# key read as a *fallback* would quietly undo that: every player whose own key
-# was missing would silently be spending the server operator's quota instead,
-# and nothing on screen would say so. The failure mode of having no fallback
-# is an honest "add your API key to use this"; the failure mode of having one
-# is a surprise bill.
+# This used to be deliberately absent, and the reasoning still holds for the
+# desktop: a server key read as a silent *fallback* would have every player
+# whose own key was missing quietly spending the operator's quota. What
+# changed is that the operator decided to pay for the website's AI use
+# outright, so the website no longer offers a key box at all (there is
+# nothing for one to fall back *from*), and that bill is now the intended
+# cost rather than a surprise. The desktop still brings its own key per
+# account, exactly as before -- ai.py tells the two apart by the
+# X-ForgeQB-Client header the desktop's cloud.py sets, and only a request
+# without it ever touches this key.
+#
+# Because every website user shares it, cap it: in Google AI Studio, set a
+# per-day quota on this key rather than leaving it uncapped. The API cannot
+# tell an enthusiastic player from a script, and the ceiling is the only
+# thing that bounds a bad day.
+GEMINI_SHARED_KEY = (os.environ.get("GEMINI_SHARED_KEY") or "").strip() or None
 
 JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 JWT_ISSUER = f"{SUPABASE_URL}/auth/v1"

@@ -21,7 +21,7 @@ const escapeHtml = (text) => String(text ?? '').replace(
 
 const $ = (id) => document.getElementById(id)
 
-export function initNotebook({ onBack, onNeedAiKey }) {
+export function initNotebook({ onBack }) {
   const el = {
     hubScreen: $('notebookHubScreen'), hubList: $('notebookHubList'),
     hubEmpty: $('notebookHubEmpty'),
@@ -392,14 +392,10 @@ export function initNotebook({ onBack, onNeedAiKey }) {
       await openShelf(shelf)
     } catch (error) {
       // ApiError.empty on a 404 with no clues -- an instruction, not a
-      // failure. Google credential setup is a different kind of "not ready
-      // yet" and gets routed to Settings instead of read on this page.
-      if (error.payload?.code === 'no_key' && onNeedAiKey) {
-        el.generateGuideStatus.textContent = error.message
-        onNeedAiKey()
-      } else {
-        el.generateGuideStatus.textContent = error.message
-      }
+      // failure -- and `no_key`, which on the website now means the
+      // operator's shared key is unset (web/api/ai.py); both are read here,
+      // since there is no longer a Settings box to send anyone to.
+      el.generateGuideStatus.textContent = error.message
     } finally {
       el.generateGuideBtn.disabled = false
     }

@@ -589,8 +589,12 @@ function drawKnowledgeDepth(data) {
   if (!data.namedByAi) {
     const note = document.createElement('p')
     note.className = 'mb-3 text-xs text-text-muted'
+    // Names are generated in the background after the first visit, so
+    // this note is what the first look sees; there is nothing for the
+    // player to do about it any more (the website's AI runs on the
+    // operator's key), so it no longer tells them to.
     note.textContent = 'Topic names below are drawn from example answers, ' +
-      'not generated — add a Gemini key in Settings for real topic names.'
+      'not generated yet — check back after a moment for real topic names.'
     frame.append(note)
   }
 

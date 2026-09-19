@@ -1,4 +1,19 @@
-"""Gemini, called with whichever player's key is making the request.
+"""Gemini, called with the key that belongs to whoever is asking.
+
+Two callers, two keys. The **desktop** brings one per account, saved through
+Settings and stored encrypted (secrets_store.py) -- the model this module was
+built around, described below. The **website** brings none: every browser
+user's AI call is made with the operator's own key, `config.GEMINI_SHARED_KEY`,
+which the operator pays for. The website has no key box any more, and nothing
+a website user has saved (from the desktop, say) is consulted -- it is the
+operator's key or nothing.
+
+The two are told apart by `X-ForgeQB-Client: desktop`, the header
+`forge_backend/cloud.py` puts on every call it proxies. That is a convention,
+not a security boundary (a browser could send it and get itself treated as a
+desktop, at which point it would be using its own key, which costs the
+operator nothing), and it is the same convention routes/settings.py already
+relies on to decide whether to hand a saved key back in the clear.
 
 The desktop keeps one module-level `GeminiGetter` holding one key, because a
 desktop app is one process for one person. That shape does not survive a
@@ -27,8 +42,11 @@ import json
 import re
 import traceback
 
+from flask import has_request_context, request
+
 from geminiGetter import AIError, GeminiGetter
 
+import config
 import secrets_store
 
 
@@ -87,8 +105,38 @@ def verify_key(api_key):
         return False, f"Could not reach Google to check that key: {type(e).__name__}"
 
 
-def for_user(conn, user_id):
-    """The GeminiGetter for one account, or raise NoKeyConfigured."""
+def is_website_request():
+    """True when the current request came from a browser, not the desktop.
+
+    Read off the request, so it has to be called *on* the request thread. A
+    caller that goes on to do AI work somewhere else -- routes/stats.py names
+    clusters on a background thread -- must call this first and carry the
+    answer across, because off the request thread there is no header to read
+    and the honest answer is "no idea", not "website".
+    """
+    if not has_request_context():
+        raise RuntimeError("is_website_request() called outside a request")
+    return request.headers.get("X-ForgeQB-Client") != "desktop"
+
+
+def for_user(conn, user_id, *, website):
+    """The GeminiGetter for this call, or raise NoKeyConfigured.
+
+    `website` decides whose key: the operator's shared one for the website,
+    this account's own saved one for the desktop. It is a required keyword
+    rather than a default so a new call site has to say which it is -- the
+    wrong default here is a wrong bill, quietly, and not the kind that shows
+    up in a test.
+    """
+    if website:
+        if not config.GEMINI_SHARED_KEY:
+            # The operator has not set the key on the server. There is no
+            # box for the player to fix this from, so the message says
+            # whose problem it is.
+            raise NoKeyConfigured(
+                "AI features aren't switched on for the website right now.")
+        return _client(config.GEMINI_SHARED_KEY)
+
     key = secrets_store.load_gemini_key(conn, user_id)
     if not key:
         raise NoKeyConfigured(
@@ -170,5 +218,5 @@ def extract_flashcard_json(raw_response):
     return cards
 
 
-__all__ = ["AIError", "NoKeyConfigured", "for_user", "verify_key",
-           "extract_flashcard_json"]
+__all__ = ["AIError", "NoKeyConfigured", "for_user", "is_website_request",
+           "verify_key", "extract_flashcard_json"]

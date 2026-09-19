@@ -38,13 +38,14 @@ def _question_and_answer(conn, question_id):
 def _getter_or_error(conn):
     """(getter, error_response). error_response is None on success.
 
-    `ai.NoKeyConfigured` is not a server failure -- it means this account
-    hasn't pasted a key into Settings yet -- so it comes back as a 400 with a
-    `code` the frontend can switch on, rather than the generic error banner
-    every other failure gets.
+    `ai.NoKeyConfigured` is not a server failure -- on the desktop it means
+    this account hasn't pasted a key into Settings yet; on the website it
+    means the operator hasn't set the shared key -- so it comes back as a 400
+    with a `code` the frontend can switch on, rather than the generic error
+    banner every other failure gets.
     """
     try:
-        return ai.for_user(conn, g.user_id), None
+        return ai.for_user(conn, g.user_id, website=ai.is_website_request()), None
     except ai.NoKeyConfigured as e:
         return None, (jsonify({"error": str(e), "code": "no_key"}), 400)
 

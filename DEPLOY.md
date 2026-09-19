@@ -46,6 +46,7 @@ will fight them.
 | `SUPABASE_URL` | `https://<project-ref>.supabase.co` (Project Settings → API → Project URL) |
 | `DATABASE_URL` | The **session pooler** connection string (Project Settings → Database → Connection string → "Session pooler", port 5432). **Not** the direct connection (`db.<ref>.supabase.co`) — a long-lived pool exhausts its low connection cap. |
 | `SECRETS_ENCRYPTION_KEY` | A Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Store it somewhere safe — rotating it makes every saved per-user Gemini key unreadable. |
+| `GEMINI_SHARED_KEY` | The operator's own Gemini key, from [aistudio.google.com/apikey](https://aistudio.google.com/apikey). **Every website user's AI call is billed to this key** — explanations, flashcards, study guides, topic naming. The website has no per-user key box; the desktop app still uses each account's own saved key and never touches this one. Set a daily quota on it in AI Studio. If unset, the website's AI buttons say the feature is switched off. |
 | `CORS_ORIGINS` | The frontend's deployed origin, e.g. `https://forgeqb.vercel.app`. Comma-separated if more than one. **The browser blocks every API call if this does not match.** |
 | `SUPABASE_JWT_SECRET` | Only if the Supabase project still signs JWTs with the legacy HS256 shared secret (Project Settings → API → JWT Settings). Projects on asymmetric signing keys leave this unset. |
 

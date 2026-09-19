@@ -235,12 +235,6 @@ export const api = {
   resetStats: () => call('/api/stats/reset', { method: 'POST' }),
 
   // ---------------------------------------------------------- AI, per-user --
-  // Each account brings its own Gemini key; see web/api/ai.py. GET never
-  // returns the key itself, only a hint -- see routes/settings.py.
-  aiKeyStatus: () => call('/api/settings/ai-key'),
-  saveAiKey: (apiKey) =>
-    call('/api/settings/ai-key', { method: 'POST', body: { apiKey } }),
-  deleteAiKey: () => call('/api/settings/ai-key/delete', { method: 'POST' }),
 
   explainQuestion: (questionId, userAnswer) =>
     call('/api/ai/explain', { method: 'POST', body: { questionId, userAnswer } }),

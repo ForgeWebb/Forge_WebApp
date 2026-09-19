@@ -432,10 +432,14 @@ def _name_clusters_in_background(user_id, pairs):
     someone else's landing first) safe to just try again, so nothing here
     needs to be certain of finishing.
     """
+    # Decided here, on the request thread, because the thread below has no
+    # request to read the header off -- see ai.is_website_request.
+    website = ai.is_website_request()
+
     def name():
         try:
             with db.user_tx(user_id) as conn:
-                getter = ai.for_user(conn, user_id)
+                getter = ai.for_user(conn, user_id, website=website)
                 examples = clusters.representative_examples(conn, pairs)
             groups = [{"id": f"{sub}#{cid}", "answers": examples[(sub, cid)]}
                       for sub, cid in pairs if examples.get((sub, cid))]
