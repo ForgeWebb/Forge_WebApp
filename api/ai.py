@@ -79,6 +79,11 @@ def verify_key(api_key):
     Uses the model *listing* rather than a generation call: it is the cheapest
     thing that still proves the key is real and enabled, and it does not spend
     the player's tokens to find out whether they typed their key correctly.
+
+    Only the desktop reaches this now (through POST /api/settings/ai-key). The
+    website has no key box, and the operator's shared key is not verified on
+    the way in -- it arrives as an environment variable, and there is nobody
+    at a keyboard to show a problem to.
     """
     try:
         from google import genai

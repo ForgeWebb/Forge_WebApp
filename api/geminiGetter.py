@@ -74,12 +74,48 @@ class GeminiGetter:
     MAX_ATTEMPTS = 3
     RETRY_BASE_DELAY = 0.8
 
+    # Which model to ask. Overridable by environment (GEMINI_MODEL) or by
+    # config.json, because the name is the one thing here that goes stale
+    # without any code being wrong: Google renames and retires models on its
+    # own schedule, and a retired name fails every AI feature at once. Being
+    # a setting means a swap is a Railway variable on the web side and a
+    # config edit on the desktop -- not a code change, and in particular not
+    # a full PyInstaller rebuild and re-release of the desktop app.
+    #
+    # It also matters for the newer AQ.-prefixed API keys, which older models
+    # reportedly do not accept.
+    DEFAULT_MODEL = "models/gemini-2.5-flash"
+
     def __init__(self):
         self._client = None
         self._client_key = None
         self.key = self._load_key()
+        self.model = self._load_model()
         if self.key:
             self.update_api_key(self.key)
+
+    def _load_model(self):
+        """The model name, from config.json, then the environment, then the
+        default. Same order as the key, and guarded the same way -- a
+        malformed config must not stop the backend from starting.
+
+        Accepts a bare name ("gemini-3-flash") as well as a fully qualified
+        one; the API wants the "models/" prefix, so one is added if missing
+        rather than having every caller remember it.
+        """
+        name = None
+        if os.path.exists(self.CONFIG_FILE):
+            try:
+                with open(self.CONFIG_FILE, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                if isinstance(config, dict):
+                    name = config.get("GEMINI_MODEL")
+            except Exception:
+                pass    # _load_key already reported an unreadable config
+        name = (name or os.getenv("GEMINI_MODEL") or "").strip()
+        if not name:
+            return self.DEFAULT_MODEL
+        return name if name.startswith("models/") else f"models/{name}"
 
     def _get_client(self):
         """Reuse one client per key instead of building one per request."""
@@ -158,7 +194,7 @@ class GeminiGetter:
         for attempt in range(self.MAX_ATTEMPTS):
             try:
                 response = client.models.generate_content(
-                    model="models/gemini-2.5-flash",
+                    model=self.model,
                     contents=prompt
                 )
             except Exception as e:
