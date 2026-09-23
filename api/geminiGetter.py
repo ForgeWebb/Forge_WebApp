@@ -259,7 +259,30 @@ class GeminiGetter:
                 return text
 
             # An empty body is transient in the same way a 503 is.
-            last_exc = RuntimeError("empty response")
+            #
+            # Logged, and in detail, because this path used to print nothing
+            # at all: three empty replies produced the same "Couldn't
+            # generate that" as a hard failure, with an empty log next to it,
+            # which is indistinguishable from the request never having been
+            # made. An empty body is also rarely random -- it usually means
+            # the model declined (a safety filter, a token ceiling reached
+            # while still "thinking"), and `finish_reason` says which. That is
+            # the difference between "retry" and "this prompt will never
+            # work", so it belongs in the log.
+            reason = parts = None
+            try:
+                candidates = getattr(response, "candidates", None) or []
+                if candidates:
+                    reason = getattr(candidates[0], "finish_reason", None)
+                    content = getattr(candidates[0], "content", None)
+                    parts = len(getattr(content, "parts", None) or []) if content else 0
+            except Exception:
+                pass    # diagnostics must never be the thing that fails
+            print(f"Gemini returned an empty response from {self.model} "
+                  f"(attempt {attempt + 1}/{self.MAX_ATTEMPTS}, "
+                  f"finish_reason={reason}, parts={parts})")
+
+            last_exc = RuntimeError(f"empty response (finish_reason={reason})")
             if attempt < self.MAX_ATTEMPTS - 1:
                 time.sleep(self.RETRY_BASE_DELAY * (2 ** attempt))
                 continue
