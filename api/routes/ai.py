@@ -21,6 +21,7 @@ from flask import Blueprint, g, jsonify, request
 import ai
 import db
 import notebook
+import ratelimit
 from answerline import clean_answerline
 from auth import require_user
 
@@ -52,6 +53,7 @@ def _getter_or_error(conn):
 
 @bp.post("/explain")
 @require_user
+@ratelimit.limit_website_ai
 def explain():
     """A whole-tossup explanation, clue by clue."""
     payload = request.get_json(silent=True) or {}
@@ -84,6 +86,7 @@ def explain():
 
 @bp.post("/explain-sentence")
 @require_user
+@ratelimit.limit_website_ai
 def explain_sentence():
     """One clue, explained mid-read -- same shape, a smaller prompt."""
     payload = request.get_json(silent=True) or {}
@@ -112,6 +115,7 @@ def explain_sentence():
 
 @bp.post("/flashcards")
 @require_user
+@ratelimit.limit_website_ai
 def generate_flashcards():
     """Draft flashcards from one tossup. Returned, not saved.
 
@@ -157,6 +161,7 @@ def generate_flashcards():
 
 @bp.post("/guide")
 @require_user
+@ratelimit.limit_website_ai
 def generate_guide():
     """A study guide, built from this account's saved clues and saved as a note.
 

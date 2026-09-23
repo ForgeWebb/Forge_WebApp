@@ -92,6 +92,22 @@ def user_tx(user_id):
 
 
 @contextmanager
+def service_tx():
+    """A transaction as the pool's own role, with no user attached.
+
+    For bookkeeping that belongs to the service rather than to any one
+    account. The only user is ratelimit.py's counter table, which must *not*
+    be reachable by the `authenticated` role, since a user who could write it
+    could reset their own limit. Deliberately no role switch, so nothing that
+    reads user data should ever go through here: the WHERE-clause-plus-RLS
+    rule in this module's docstring does not apply inside it.
+    """
+    with pool.connection() as conn:
+        with conn.transaction():
+            yield conn
+
+
+@contextmanager
 def content_tx():
     """A transaction for the shared question set.
 

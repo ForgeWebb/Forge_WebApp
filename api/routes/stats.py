@@ -37,6 +37,7 @@ import traceback
 from flask import Blueprint, g, jsonify, request
 
 import adaptive
+import ratelimit
 import ai
 import clusters
 import db
@@ -438,6 +439,13 @@ def _name_clusters_in_background(user_id, pairs):
 
     def name():
         try:
+            if website:
+                # Charged to the daily total only -- there is no request here
+                # to read an account or an address off. Raises Limited, which
+                # the AIError/Exception handlers below do not catch, so the
+                # `except Exception` is what swallows it: nothing to report,
+                # the fallback labels already on screen stand.
+                ratelimit.take_global()
             with db.user_tx(user_id) as conn:
                 getter = ai.for_user(conn, user_id, website=website)
                 examples = clusters.representative_examples(conn, pairs)

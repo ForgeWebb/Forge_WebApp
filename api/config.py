@@ -75,6 +75,40 @@ SECRETS_ENCRYPTION_KEY = os.environ.get("SECRETS_ENCRYPTION_KEY")
 # thing that bounds a bad day.
 GEMINI_SHARED_KEY = (os.environ.get("GEMINI_SHARED_KEY") or "").strip() or None
 
+
+def _int_env(name, default):
+    """An integer setting from the environment, falling back on a typo.
+
+    A limit that silently became 0 because someone typed "fifty" would switch
+    that limit off, which is the opposite of what anyone editing a limit
+    intends. So a bad value keeps the default and says so in the log.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw.strip())
+    except ValueError:
+        print(f"{name}={raw!r} is not a whole number; using {default}")
+        return default
+
+
+# Caps on the website's AI usage, all per fixed window -- see ratelimit.py.
+# Every website AI call is charged to the operator's key, so these are what
+# bound the bill. The desktop is not counted: it spends each account's own
+# key. Set any of these to 0 to switch that one limit off.
+#
+# The defaults are picked against gemini-2.5-flash's free tier, which is a
+# few hundred requests a day in total. The global cap is deliberately the
+# binding one: the per-user and per-IP caps exist to stop one person or one
+# machine eating the whole allowance before anyone else arrives, and the
+# global cap is the guarantee that the day's total cannot exceed it however
+# many accounts show up. Raise them all once the key is on a paid plan.
+AI_LIMIT_USER_PER_HOUR = _int_env("AI_LIMIT_USER_PER_HOUR", 20)
+AI_LIMIT_USER_PER_DAY = _int_env("AI_LIMIT_USER_PER_DAY", 60)
+AI_LIMIT_IP_PER_DAY = _int_env("AI_LIMIT_IP_PER_DAY", 200)
+AI_LIMIT_GLOBAL_PER_DAY = _int_env("AI_LIMIT_GLOBAL_PER_DAY", 400)
+
 JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 JWT_ISSUER = f"{SUPABASE_URL}/auth/v1"
 JWT_AUDIENCE = "authenticated"
