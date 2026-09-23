@@ -51,6 +51,24 @@ def _getter_or_error(conn):
         return None, (jsonify({"error": str(e), "code": "no_key"}), 400)
 
 
+def _ai_error(e):
+    """A 502 carrying a message that fits whoever is reading it.
+
+    geminiGetter's wording assumes the reader owns the key and can go and fix
+    it in Settings -- true on the desktop, and it is the desktop's copy of
+    that file, so it stays as it is. On the website the key belongs to the
+    operator and the reader has no Settings box to check (there isn't one any
+    more), so "check it in Settings" sends them somewhere that does not
+    exist. Rewritten here, at the boundary that knows which app is asking,
+    rather than by making the shared file take a caller argument.
+    """
+    text = str(e)
+    if ai.is_website_request() and "api key" in text.lower():
+        text = ("The website's AI isn't set up correctly right now. This is "
+                "not something you can fix - try again later.")
+    return jsonify({"error": text}), 502
+
+
 @bp.post("/explain")
 @require_user
 @ratelimit.limit_website_ai
@@ -79,7 +97,7 @@ def explain():
             question_text=row["question"], answer_text=row["answer"],
             user_answer=user_answer)
     except ai.AIError as e:
-        return jsonify({"error": str(e)}), 502
+        return _ai_error(e)
 
     return jsonify({"explanation": explanation})
 
@@ -108,7 +126,7 @@ def explain_sentence():
     try:
         explanation = getter.get_sentence_explanation(sentence, row["answer"])
     except ai.AIError as e:
-        return jsonify({"error": str(e)}), 502
+        return _ai_error(e)
 
     return jsonify({"explanation": explanation})
 
@@ -142,7 +160,7 @@ def generate_flashcards():
     try:
         raw = getter.create_flashcards(row["question"])
     except ai.AIError as e:
-        return jsonify({"error": str(e)}), 502
+        return _ai_error(e)
 
     try:
         cards = ai.extract_flashcard_json(raw)
@@ -235,7 +253,7 @@ def generate_guide():
     try:
         content = getter.get_notes_from_clues("\n".join(formatted))
     except ai.AIError as e:
-        return jsonify({"error": str(e)}), 502
+        return _ai_error(e)
 
     answer_text = notebook.derive_title_from_content(content)
     if notebook.looks_like_intro_sentence(answer_text):
