@@ -98,7 +98,7 @@ def _int_env(name, default):
 # bound the bill. The desktop is not counted: it spends each account's own
 # key. Set any of these to 0 to switch that one limit off.
 #
-# The defaults are picked against gemini-2.5-flash's free tier, which is a
+# The defaults are picked against a Flash model's free tier, which is a
 # few hundred requests a day in total. The global cap is deliberately the
 # binding one: the per-user and per-IP caps exist to stop one person or one
 # machine eating the whole allowance before anyone else arrives, and the

@@ -63,7 +63,15 @@ def _ai_error(e):
     rather than by making the shared file take a caller argument.
     """
     text = str(e)
-    if ai.is_website_request() and "api key" in text.lower():
+    lowered = text.lower()
+    # Two kinds of failure are the operator's to fix and nobody else's: a
+    # rejected key, and a model name that no longer exists. geminiGetter's
+    # wording for both names the setting to change, which is right for the
+    # desktop (its own copy, its own key, its own config) and useless on the
+    # website, where the reader owns neither and has no Settings box to look
+    # at. The real message is in the server log, where the operator will
+    # find it.
+    if ai.is_website_request() and ("api key" in lowered or "model" in lowered):
         text = ("The website's AI isn't set up correctly right now. This is "
                 "not something you can fix - try again later.")
     return jsonify({"error": text}), 502

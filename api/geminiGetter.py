@@ -48,6 +48,17 @@ def _friendly_ai_error(exc):
         return "Your API key was rejected. Check it in Settings."
     if "quota" in text or "rate limit" in text or "resource_exhausted" in text or "429" in text:
         return "You've hit the AI usage limit for now. Try again later."
+    # A retired or misnamed model. Its own branch because it went undiagnosed
+    # for an afternoon behind the catch-all below: Google retired
+    # gemini-2.5-flash "for new users", so a new key got a 404 naming the
+    # replacement model, and every AI feature reported "Couldn't generate
+    # that. Try again." -- which reads as a transient fault and invites
+    # exactly the retry that cannot ever work. The model name is a setting
+    # now (see DEFAULT_MODEL), so this is a thing an operator can act on.
+    if "not_found" in text or "404" in text or "is no longer available" in text:
+        return ("The AI model this app asks for is not available. It has "
+                "probably been retired - see the log for the replacement "
+                "Google names, and set GEMINI_MODEL to it.")
     if "deadline" in text or "timeout" in text or "connection" in text or "network" in text:
         return "Couldn't connect. Check your internet connection."
     # Everything else - busy models, server errors, malformed replies - is the
@@ -84,7 +95,33 @@ class GeminiGetter:
     #
     # It also matters for the newer AQ.-prefixed API keys, which older models
     # reportedly do not accept.
-    DEFAULT_MODEL = "models/gemini-2.5-flash"
+    # Changed from gemini-2.5-flash on 2026-09-23, because Google closed it:
+    #
+    #   404 NOT_FOUND: This model models/gemini-2.5-flash is no longer
+    #   available to new users. Please update your code to use
+    #   models/gemini-3.6-flash
+    #
+    # Note "to new users". Keys that already had access kept working, so this
+    # broke in the least visible way possible: every existing desktop user was
+    # fine, and only a freshly created key saw the 404 -- which is exactly
+    # what a new website deployment and every new install is. It also arrived
+    # as the generic "Couldn't generate that. Try again.", a retired model not
+    # being one of the causes _friendly_ai_error knew about; it is now.
+    #
+    # The oldest Flash model still open, deliberately, and not a "-lite" one.
+    # Aaron's call, to stay off whatever the newest model's quota costs: the
+    # website runs every user's AI on one key, so the cheapest adequate model
+    # is the one that keeps that key alive longest. 3.5-flash is the oldest
+    # non-lite Flash on the current list (3.8, 3.7, 3.6, 3.5, then only
+    # lite variants below that).
+    #
+    # Worth knowing if this is revisited: Google does not publish per-model
+    # free-tier limits, so "older is cheaper" is an assumption, not a
+    # measured fact -- the real numbers are per-account, at
+    # aistudio.google.com/rate-limit. And an older model is the one more
+    # likely to be closed next, exactly as 2.5-flash just was. If AI starts
+    # failing with a 404 again, this is the first thing to move forward.
+    DEFAULT_MODEL = "models/gemini-3.5-flash"
 
     def __init__(self):
         self._client = None
