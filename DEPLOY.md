@@ -55,6 +55,31 @@ will fight them.
 | `CORS_ORIGINS` | The frontend's deployed origin, e.g. `https://forgeqb.vercel.app`. Comma-separated if more than one. **The browser blocks every API call if this does not match.** |
 | `SUPABASE_JWT_SECRET` | Only if the Supabase project still signs JWTs with the legacy HS256 shared secret (Project Settings → API → JWT Settings). Projects on asymmetric signing keys leave this unset. |
 
+### Password reset email (Supabase dashboard, one-time)
+
+"Forgot your password?" emails a **code** the player types in, rather than
+only a link. The code comes from Supabase, but Supabase's default "Reset
+Password" email contains just the link. Until the template is edited, players
+are told to check for a code that never arrives.
+
+Supabase → **Authentication** → **Emails** → **Reset Password** → replace the
+body with:
+
+```html
+<h2>Reset your ForgeQB password</h2>
+<p>Your code is:</p>
+<p style="font-size:28px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
+<p>Type it into the reset page along with your new password. It expires soon
+and works once.</p>
+<p>Or <a href="{{ .ConfirmationURL }}">reset it with this link</a> instead.</p>
+<p>If you didn't ask for this, ignore this email.</p>
+```
+
+`{{ .Token }}` is the code; `{{ .ConfirmationURL }}` keeps the old link
+working as a fallback, which the app still handles. The code is single-use,
+and Supabase allows one reset email per address per 60 seconds, which is why
+the page's "Send a new code" button waits that long.
+
 ### Rate limits on the website's AI
 
 Every website AI request is billed to `GEMINI_SHARED_KEY`, so the four

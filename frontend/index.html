@@ -60,6 +60,53 @@
                   class="rounded-full bg-[#efe0db] px-4 py-2 font-bold text-[#1d1816] disabled:opacity-50">Set new password</button>
         </form>
 
+        <!-- Forgot password, by code. Two steps on one card: ask for the
+             email, then take the code from that email together with the new
+             password. A code rather than only a link because a link has to be
+             opened in the same browser that asked for it, which is exactly
+             what fails when the email is read on a phone. The emailed link
+             still works too (recoveryForm above) if the template carries both.
+             The code only arrives if the Supabase "Reset Password" email
+             template includes {{ .Token }} -- see web/DEPLOY.md. -->
+        <div id="forgotPanel" class="mt-5 hidden flex-col gap-3">
+          <form id="forgotEmailForm" class="flex flex-col gap-3">
+            <p class="text-sm font-bold">Reset your password</p>
+            <p class="text-sm text-text-muted">
+              Enter the email on your account and we'll send you a code.
+            </p>
+            <input id="forgotEmail" type="email" placeholder="you@example.com" required
+                   autocomplete="email"
+                   class="rounded-lg border border-[#584741] bg-[#1d1816] p-3 focus:border-[#efe0db] focus:outline-none" aria-label="Email address" />
+            <button id="sendResetCodeBtn" type="submit"
+                    class="rounded-full bg-[#efe0db] px-4 py-2 font-bold text-[#1d1816] disabled:opacity-50">Send code</button>
+          </form>
+
+          <form id="forgotCodeForm" class="hidden flex-col gap-3">
+            <p class="text-sm font-bold">Check your email</p>
+            <p id="forgotCodeSentTo" class="text-sm text-text-muted"></p>
+            <!-- No pattern attribute: the browser would reject a pasted "123 456" or a
+                 trailing space outright, before the submit handler (which strips
+                 whitespace and explains itself) ever ran. maxlength leaves room
+                 for the spaces a copied code can carry. -->
+            <input id="resetCode" type="text" inputmode="numeric"
+                   maxlength="16" placeholder="Code" required autocomplete="one-time-code"
+                   class="rounded-lg border border-[#584741] bg-[#1d1816] p-3 focus:border-[#efe0db] focus:outline-none text-center text-lg tracking-[0.3em]" aria-label="Code from the email" />
+            <input id="resetNewPassword" type="password" placeholder="New password" required
+                   minlength="8" autocomplete="new-password"
+                   class="rounded-lg border border-[#584741] bg-[#1d1816] p-3 focus:border-[#efe0db] focus:outline-none" aria-label="New password" />
+            <input id="resetConfirmPassword" type="password" placeholder="Confirm new password" required
+                   minlength="8" autocomplete="new-password"
+                   class="rounded-lg border border-[#584741] bg-[#1d1816] p-3 focus:border-[#efe0db] focus:outline-none" aria-label="Confirm new password" />
+            <button id="confirmResetBtn" type="submit"
+                    class="rounded-full bg-[#efe0db] px-4 py-2 font-bold text-[#1d1816] disabled:opacity-50">Reset password</button>
+            <button id="resendResetCodeBtn" type="button"
+                    class="self-start text-xs text-text-muted underline hover:text-[#efe0db] disabled:opacity-50">Send a new code</button>
+          </form>
+
+          <button id="backToSignInBtn" type="button"
+                  class="self-start text-xs text-text-muted underline hover:text-[#efe0db] disabled:opacity-50">Back to sign in</button>
+        </div>
+
         <p id="authMessage" class="mt-3 text-sm text-[#f6b17a]"></p>
       </div>
     </div>

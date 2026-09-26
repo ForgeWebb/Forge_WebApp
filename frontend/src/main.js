@@ -18,6 +18,12 @@ const el = {
   email: $('email'), password: $('password'), rememberMe: $('rememberMe'),
   signInBtn: $('signInBtn'), signUpBtn: $('signUpBtn'), forgotPasswordBtn: $('forgotPasswordBtn'),
   recoveryForm: $('recoveryForm'), recoveryPassword: $('recoveryPassword'),
+  forgotPanel: $('forgotPanel'), forgotEmailForm: $('forgotEmailForm'),
+  forgotEmail: $('forgotEmail'), sendResetCodeBtn: $('sendResetCodeBtn'),
+  forgotCodeForm: $('forgotCodeForm'), forgotCodeSentTo: $('forgotCodeSentTo'),
+  resetCode: $('resetCode'), resetNewPassword: $('resetNewPassword'),
+  resetConfirmPassword: $('resetConfirmPassword'), confirmResetBtn: $('confirmResetBtn'),
+  resendResetCodeBtn: $('resendResetCodeBtn'), backToSignInBtn: $('backToSignInBtn'),
   setNewPasswordBtn: $('setNewPasswordBtn'),
   appScreen: $('appScreen'), whoami: $('whoami'), signOutBtn: $('signOutBtn'),
   readerScreen: $('readerScreen'), profileScreen: $('profileScreen'),
@@ -219,16 +225,84 @@ let recoveringPassword = false
 // double-request the `submitting` guard stops in finish() is possible here.
 let authInFlight = false
 
+// Non-null while the reset-by-code panel is on screen: { email, verified }.
+// `verified` flips once the code has been accepted. Supabase codes are single
+// use, so if setting the password then fails (too weak, same as the old one)
+// the retry must skip straight to setting it -- sending the spent code again
+// would fail with "expired", and that would be the wrong thing to tell them.
+let codeReset = null
+
+// Supabase allows one recovery email per address per 60 seconds by default, so
+// "Send a new code" waits that long rather than inviting a click that can only
+// come back as a rate-limit error.
+const RESEND_COOLDOWN_SECONDS = 60
+let resendReadyAt = 0
+let resendTimer = null
+
 /** Lock or unlock the whole sign-in form as one unit. The handlers below all
  *  await a network round trip, and without this the buttons stayed live
  *  through it -- a second click on a slow connection sent a second request,
  *  and nothing on screen said anything was happening. */
 function authBusy(busy, message) {
   authInFlight = busy
-  for (const b of [el.signInBtn, el.signUpBtn, el.forgotPasswordBtn, el.setNewPasswordBtn]) {
+  for (const b of [el.signInBtn, el.signUpBtn, el.forgotPasswordBtn, el.setNewPasswordBtn,
+                   el.sendResetCodeBtn, el.confirmResetBtn, el.backToSignInBtn]) {
     b.disabled = busy
   }
+  paintResendButton()
   if (message !== undefined) el.authMessage.textContent = message
+}
+
+/** Resend stays off while a request is out *or* the cooldown is running,
+ *  so it has its own painter rather than a line in authBusy's loop -- that
+ *  loop would switch it back on the moment any request finished. */
+function paintResendButton() {
+  const wait = Math.ceil((resendReadyAt - Date.now()) / 1000)
+  el.resendResetCodeBtn.disabled = authInFlight || wait > 0
+  el.resendResetCodeBtn.textContent = wait > 0
+    ? `Send a new code (${wait}s)` : 'Send a new code'
+  if (wait <= 0 && resendTimer) {
+    clearInterval(resendTimer)
+    resendTimer = null
+  }
+}
+
+function startResendCooldown() {
+  resendReadyAt = Date.now() + RESEND_COOLDOWN_SECONDS * 1000
+  clearInterval(resendTimer)
+  resendTimer = setInterval(paintResendButton, 1000)
+  paintResendButton()
+}
+
+/** Which card is showing: the sign-in form, or the reset-by-code panel. */
+function showAuthPanel(which) {
+  const forgot = which === 'forgot'
+  el.authForm.classList.toggle('hidden', forgot)
+  el.forgotPanel.classList.toggle('hidden', !forgot)
+  el.forgotPanel.classList.toggle('flex', forgot)
+  el.authMessage.textContent = ''
+}
+
+/** Step 1 (email) or step 2 (code + new password) inside the reset panel. */
+function showForgotStep(step) {
+  const code = step === 'code'
+  el.forgotEmailForm.classList.toggle('hidden', code)
+  el.forgotCodeForm.classList.toggle('hidden', !code)
+  el.forgotCodeForm.classList.toggle('flex', code)
+}
+
+/** Leave the reset panel and put everything in it back to its starting state. */
+function closeForgotPanel() {
+  codeReset = null
+  resendReadyAt = 0
+  clearInterval(resendTimer)
+  resendTimer = null
+  for (const input of [el.resetCode, el.resetNewPassword, el.resetConfirmPassword]) {
+    input.value = ''
+  }
+  el.resetCode.disabled = false
+  showForgotStep('email')
+  showAuthPanel('signin')
 }
 
 const NETWORK_DOWN = 'Could not reach the server. Check your connection and try again.'
@@ -265,30 +339,147 @@ el.authForm.addEventListener('submit', async (event) => {
   }
 })
 
-el.forgotPasswordBtn.addEventListener('click', async () => {
+el.forgotPasswordBtn.addEventListener('click', () => {
   if (authInFlight) return
-  const email = el.email.value.trim()
-  if (!email) {
-    el.authMessage.textContent = 'Enter your email address first, then press this again.'
-    el.email.focus()
-    return
-  }
-  authBusy(true, 'Sending a reset link...')
+  // Carry over whatever they already typed in the sign-in form, so the most
+  // common case (typed the email, got the password wrong) is one click.
+  el.forgotEmail.value = el.email.value.trim()
+  showForgotStep('email')
+  showAuthPanel('forgot')
+  el.forgotEmail.focus()
+})
+
+/** Ask Supabase to email a recovery code. Returns the error, or null.
+ *
+ *  `redirectTo` stays set even though this flow uses the code: the same email
+ *  can carry the link too, and a player who clicks that instead still lands
+ *  on the link flow (recoveryForm) rather than on a dead page. */
+async function requestResetCode(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  })
+  return error
+}
+
+el.forgotEmailForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  if (authInFlight) return
+  const email = el.forgotEmail.value.trim()
+  if (!email) return
+  authBusy(true, 'Sending a code...')
   try {
-    // redirectTo brings the link back to this same app, where the
-    // PASSWORD_RECOVERY branch of onAuthStateChange picks it up.
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    })
-    // Same reason as a wrong password above: "no account with that email"
-    // would confirm which addresses are registered, so the message does not
-    // depend on whether one exists.
-    authBusy(false, error
-      ? error.message
-      : 'If an account uses ' + email + ', a reset link is on its way. Open it in this browser.')
+    const error = await requestResetCode(email)
+    if (error) {
+      authBusy(false, error.message)
+      return
+    }
+    codeReset = { email, verified: false }
+    // Worded so it does not confirm whether the address has an account --
+    // same reason sign-in never says which of email or password was wrong.
+    el.forgotCodeSentTo.textContent =
+      `If an account uses ${email}, we've sent it a code. It can take a minute ` +
+      `to arrive, so check your spam folder too.`
+    showForgotStep('code')
+    startResendCooldown()
+    authBusy(false, '')
+    el.resetCode.focus()
   } catch (error) {
     authBusy(false, NETWORK_DOWN)
   }
+})
+
+el.resendResetCodeBtn.addEventListener('click', async () => {
+  if (authInFlight || !codeReset || Date.now() < resendReadyAt) return
+  authBusy(true, 'Sending a new code...')
+  try {
+    const error = await requestResetCode(codeReset.email)
+    if (error) {
+      authBusy(false, error.message)
+      return
+    }
+    // A new code replaces the old one, which may be one they already used --
+    // so that half of the form starts over.
+    codeReset.verified = false
+    el.resetCode.disabled = false
+    el.resetCode.value = ''
+    startResendCooldown()
+    authBusy(false, 'New code sent. Use the one in the newest email.')
+    el.resetCode.focus()
+  } catch (error) {
+    authBusy(false, NETWORK_DOWN)
+  }
+})
+
+el.forgotCodeForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  if (authInFlight || !codeReset) return
+
+  // Spaces and hyphens are how a code often looks once copied out of an email.
+  const code = el.resetCode.value.replace(/[\s-]+/g, '')
+  const next = el.resetNewPassword.value
+  // Everything checkable is checked *before* the code is spent: a code is
+  // single use, so finding out the passwords don't match only after
+  // verifying it would cost the player a fresh email for a typo.
+  if (!codeReset.verified && !/^\d{6,10}$/.test(code)) {
+    el.authMessage.textContent = 'Enter the code from the email. It is only numbers.'
+    el.resetCode.focus()
+    return
+  }
+  if (next.length < 8) {
+    el.authMessage.textContent = 'Password must be at least 8 characters.'
+    el.resetNewPassword.focus()
+    return
+  }
+  if (next !== el.resetConfirmPassword.value) {
+    el.authMessage.textContent = 'Those passwords do not match.'
+    el.resetConfirmPassword.focus()
+    return
+  }
+
+  try {
+    if (!codeReset.verified) {
+      authBusy(true, 'Checking your code...')
+      setRememberMe(el.rememberMe.checked)
+      const { error } = await supabase.auth.verifyOtp({
+        email: codeReset.email, token: code, type: 'recovery',
+      })
+      if (error) {
+        authBusy(false, 'That code is wrong or has expired. Check it, or send a new one.')
+        el.resetCode.focus()
+        return
+      }
+      codeReset.verified = true
+      el.resetCode.disabled = true
+    }
+
+    authBusy(true, 'Setting your new password...')
+    const { error } = await supabase.auth.updateUser({ password: next })
+    if (error) {
+      // The code is spent but the session it bought is still live, so fixing
+      // the password and pressing again is all it takes -- say so.
+      authBusy(false, `${error.message} Choose another password and press Reset password again.`)
+      el.resetNewPassword.focus()
+      return
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    closeForgotPanel()
+    authBusy(false, '')
+    if (session) enterApp(session)
+  } catch (error) {
+    authBusy(false, NETWORK_DOWN)
+  }
+})
+
+el.backToSignInBtn.addEventListener('click', async () => {
+  if (authInFlight) return
+  // A verified code left a real session behind. Walking away without setting
+  // a password must not leave them quietly signed in on the old one.
+  const hadSession = codeReset?.verified
+  const email = codeReset?.email || el.forgotEmail.value.trim()
+  closeForgotPanel()
+  if (email) el.email.value = email
+  if (hadSession) await supabase.auth.signOut()
 })
 
 el.recoveryForm.addEventListener('submit', async (event) => {
@@ -336,6 +527,13 @@ function enterApp(session) {
 }
 
 supabase.auth.onAuthStateChange((event, session) => {
+  // The code flow verifies the code and sets the password in one submit, and
+  // verifying fires PASSWORD_RECOVERY with a session exactly as the link does.
+  // Left alone, that event would swap the card to the link flow's form (or
+  // straight into the app) halfway through the code form's own submit. The
+  // form finishes the job itself and calls enterApp when it is done.
+  if (codeReset && (event === 'PASSWORD_RECOVERY' || session)) return
+
   // The reset link just landed. Supabase has created a temporary session, but
   // the player came here to set a password, not to use the app -- so hold on
   // the auth screen and show the recovery form instead of falling through.
